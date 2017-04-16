@@ -1,4 +1,6 @@
-﻿using System;
+﻿using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,7 +26,7 @@ namespace Dulux
     public partial class MainWindow : Window
     {
         public static List<Info> Infos = new List<Info>();
-        private SolidColorBrush ColorWhite = new SolidColorBrush(Colors.White);
+        private SolidColorBrush ColorWhite = new SolidColorBrush(System.Windows.Media.Colors.White);
 
         public MainWindow()
         {
@@ -35,7 +37,8 @@ namespace Dulux
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             ResizeWindow();
-            ReadData();
+            //ReadData();
+            ReadDataOpenXML();
             BindData();
         }
 
@@ -170,6 +173,56 @@ namespace Dulux
             //quit and release
             xlApp.Quit();
             Marshal.ReleaseComObject(xlApp);
+        }
+
+
+        private static void ReadDataOpenXML()
+        {
+            try
+            {
+                var path = Directory.GetCurrentDirectory();
+                var filePath = path + @"\Dulux_data.xlsx";
+
+                using (SpreadsheetDocument doc = SpreadsheetDocument.Open(filePath, false))
+                {
+                    WorkbookPart workbookPart = doc.WorkbookPart;
+                    IEnumerable<Sheet> sheets = doc.WorkbookPart.Workbook.GetFirstChild<Sheets>().Elements<Sheet>();
+                    string relationshipId = sheets.First().Id.Value;
+                    WorksheetPart worksheetPart = (WorksheetPart)doc.WorkbookPart.GetPartById(relationshipId);
+                    Worksheet workSheet = worksheetPart.Worksheet;
+                    SheetData sheetData = workSheet.GetFirstChild<SheetData>();
+                    List<Row> rows = sheetData.Descendants<Row>().ToList();
+
+                    for (int i = 1; i < rows.Count(); i++)
+                    {
+                        var info = new Info();
+                        info.No = GetCellValue(doc, rows[i].Descendants<Cell>().ElementAt(0));
+                        info.Name = GetCellValue(doc, rows[i].Descendants<Cell>().ElementAt(1));
+                        info.Address = GetCellValue(doc, rows[i].Descendants<Cell>().ElementAt(2));
+                        info.Amount = GetCellValue(doc, rows[i].Descendants<Cell>().ElementAt(3));
+                        Infos.Add(info);                
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                
+            }
+        }
+
+        private static string GetCellValue(SpreadsheetDocument document, Cell cell)
+        {
+            SharedStringTablePart stringTablePart = document.WorkbookPart.SharedStringTablePart;
+            string value = cell.CellValue.InnerXml;
+
+            if (cell.DataType != null && cell.DataType.Value == CellValues.SharedString)
+            {
+                return stringTablePart.SharedStringTable.ChildElements[Int32.Parse(value)].InnerText;
+            }
+            else
+            {
+                return value;
+            }
         }
     }
 }
